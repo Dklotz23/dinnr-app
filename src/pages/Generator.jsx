@@ -3,8 +3,44 @@ import { useData } from '../context/DataContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const parseAmount = (amount) => {
+  const value = String(amount).trim();
+  const parts = value.split(/\s+/);
+  let total = 0;
+
+  for (const part of parts) {
+    if (part.includes('/')) {
+      const [numerator, denominator] = part.split('/').map(Number);
+      if (!denominator) return null;
+      total += numerator / denominator;
+    } else {
+      const number = Number(part);
+      if (Number.isNaN(number)) return null;
+      total += number;
+    }
+  }
+
+  return total;
+};
+
+const formatAmount = (amount) => {
+  const whole = Math.floor(amount);
+  const fraction = amount - whole;
+  const fractions = [
+    [1 / 4, '1/4'],
+    [1 / 2, '1/2'],
+    [3 / 4, '3/4']
+  ];
+  const match = fractions.find(([value]) => Math.abs(fraction - value) < 0.001);
+
+  if (!match) return String(Math.round(amount * 100) / 100);
+  if (whole === 0) return match[1];
+  return `${whole} ${match[1]}`;
+};
 
 export default function Generator() {
   // 1. Pull selectedDays from context (this was missing from your destructuring)
@@ -19,6 +55,75 @@ export default function Generator() {
   const updateSelectedInDB = async (newList) => {
     const householdRef = doc(db, "households", HOUSEHOLD_ID);
     await updateDoc(householdRef, { selected_days: newList });
+  };
+
+  const moveLockedMealsToPantry = async () => {
+    const lockedMealNames = DAYS
+      .filter(day => lockedDays.includes(day))
+      .map(day => weekPlan[day])
+      .filter(Boolean);
+
+    if (lockedMealNames.length === 0) {
+      navigate('/store');
+      return;
+    }
+
+    try {
+      const householdRef = doc(db, "households", HOUSEHOLD_ID);
+      const ingredientTotals = new Map();
+      const mealsWithoutIngredients = new Set();
+
+      lockedMealNames.forEach(mealName => {
+        const meal = meals.find(item => item.name === mealName);
+        if (!meal?.ingredients?.length) {
+          mealsWithoutIngredients.add(mealName);
+          return;
+        }
+
+        meal?.ingredients?.forEach(ingredient => {
+          const name = ingredient.name.trim();
+          const unit = ingredient.unit.trim();
+          const key = `${name.toLowerCase()}|${unit.toLowerCase()}`;
+          const amount = parseAmount(ingredient.amount);
+          const current = ingredientTotals.get(key);
+
+          if (!current) {
+            ingredientTotals.set(key, { name, unit, amount, rawAmount: ingredient.amount });
+          } else if (amount !== null && current.amount !== null) {
+            current.amount += amount;
+          } else {
+            current.amount = null;
+            current.rawAmount = `${current.rawAmount}, ${ingredient.amount}`;
+          }
+        });
+      });
+
+      const newPantryItems = [...ingredientTotals.values()].map(ingredient => ({
+        id: uuidv4(),
+        text: `${ingredient.amount === null ? ingredient.rawAmount : formatAmount(ingredient.amount)} ${ingredient.unit} ${ingredient.name}`,
+        checked: false
+      })).concat(
+        [...mealsWithoutIngredients].map(mealName => ({
+          id: uuidv4(),
+          text: mealName,
+          checked: false
+        }))
+      );
+      const updates = {
+        pantry: newPantryItems,
+        locked_days: [],
+        selected_days: selectedDays.filter(day => !lockedDays.includes(day))
+      };
+
+      lockedDays.forEach(day => {
+        if (weekPlan[day]) updates[`week_plan.${day}`] = null;
+      });
+
+      await updateDoc(householdRef, updates);
+      navigate('/store');
+    } catch (error) {
+      console.error("Error moving locked meals to pantry:", error);
+    }
   };
 
   // --- PERSISTENT LOCK TOGGLE ---
@@ -233,17 +338,17 @@ const toggleLock = async (e, day) => {
                   Let's Mix it Up! ({selectedDays.filter(d => !lockedDays.includes(d)).length} days)
                 </button>
               ) : (
-                /* 2. ELSE (Everything selected is locked, or we have a finished plan), show 'Go to Pantry' */
+                /* 2. ELSE (Everything selected is locked, or we have a finished plan), show 'Go to Store' */
                 /* We add a check to make sure there's actually a meal in the plan before showing this */
                 Object.keys(weekPlan).some(day => !!weekPlan[day]) && (
                   <button 
-                    onClick={() => navigate('/pantry')}
+                    onClick={moveLockedMealsToPantry}
                     className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:bg-green-700 transition-all flex items-center gap-2 animate-in fade-in zoom-in duration-300"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                     </svg>
-                    Go to Pantry
+                    Go to Store
                   </button>
                 )
               )}
