@@ -48,6 +48,7 @@ export default function Generator() {
   const [shufflingDays, setShufflingDays] = useState([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [filterTag, setFilterTag] = useState(null);
+  const [manualSelectDay, setManualSelectDay] = useState(null);
   
   const navigate = useNavigate();
 
@@ -55,6 +56,31 @@ export default function Generator() {
   const updateSelectedInDB = async (newList) => {
     const householdRef = doc(db, "households", HOUSEHOLD_ID);
     await updateDoc(householdRef, { selected_days: newList });
+  };
+
+  const assignMealToDay = async (day, mealName) => {
+    if (!mealName) return;
+
+    const lockedMealNames = DAYS
+      .filter(lockedDay => lockedDays.includes(lockedDay))
+      .map(lockedDay => weekPlan[lockedDay])
+      .filter(Boolean);
+
+    if (lockedMealNames.includes(mealName)) {
+      setShowErrorModal(true);
+      return;
+    }
+
+    try {
+      const householdRef = doc(db, "households", HOUSEHOLD_ID);
+      await updateDoc(householdRef, {
+        [`week_plan.${day}`]: mealName,
+        locked_days: [...lockedDays, day],
+        selected_days: selectedDays.filter(selectedDay => selectedDay !== day)
+      });
+    } catch (error) {
+      console.error("Error assigning meal to day:", error);
+    }
   };
 
   const moveLockedMealsToPantry = async () => {
@@ -195,6 +221,7 @@ const toggleLock = async (e, day) => {
 
     // 3. IF EMPTY: Toggle Selection with Capacity Check
     if (isSelected) {
+      setManualSelectDay(null);
       await updateSelectedInDB(selectedDays.filter(d => d !== day));
     } else {
       const availableMealCount = meals.length - lockedDays.length;
@@ -298,9 +325,41 @@ const toggleLock = async (e, day) => {
                         {!isLocked && <span className="text-[10px] text-blue-400 italic">Click to clear</span>}
                       </div>
                     ) : (
-                      <span className="text-gray-400 italic text-sm">
-                        {isSelected ? 'Ready to fill...' : 'Click to select'}
-                      </span>
+                      <div className="flex flex-col gap-2">
+                        <span className="text-gray-400 italic text-sm">
+                          {isSelected ? 'Ready to fill...' : 'Click to select'}
+                        </span>
+                        {isSelected && manualSelectDay !== day && (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              setManualSelectDay(day);
+                            }}
+                            className="max-w-[220px] px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-50"
+                          >
+                            Manually Select Meal
+                          </button>
+                        )}
+                        {isSelected && manualSelectDay === day && (
+                          <select
+                            autoFocus
+                            defaultValue=""
+                            onClick={event => event.stopPropagation()}
+                            onBlur={() => setManualSelectDay(null)}
+                            onChange={event => assignMealToDay(day, event.target.value)}
+                            className="max-w-[220px] p-2 bg-white border border-blue-200 rounded-lg text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                            aria-label={`Choose a meal for ${day}`}
+                          >
+                            <option value="">Choose a meal to lock...</option>
+                            {meals
+                              .filter(meal => !lockedDays.some(lockedDay => weekPlan[lockedDay] === meal.name))
+                              .map(meal => (
+                                <option key={meal.id} value={meal.name}>{meal.name}</option>
+                              ))}
+                          </select>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
