@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { db } from '../lib/firebase';
-import { collection, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 
-const PRESET_TAGS = ["Quick", "Healthy", "Weekend", "Takeout", "Cheat Meal"];
-const AMOUNTS = [" " ,"1/4", "1/2", "3/4", "1", "1 1/4", "1 1/2", "1 3/4", "2", "3", "4", "5", "Whole", "Bag", "Box"];
-const UNITS = [" ", "tsp", "Tbsp", "cup", "oz", "lb", "g", "kg", "ml", "pt", "qt", "ct", "clove", "can"];
+const PRESET_TAGS = ["Quick", "Healthy", "Weekend", "Cheat Meal"];
+const AMOUNTS = [" " ,"1/4", "1/2", "3/4", "1", "1 1/4", "1 1/2", "1 3/4", "2", "3", "4", "5", "6", "7", "8", "9", "10", "12", "16", "20", "24", "32"];
+const UNITS = [" ", "tsp", "Tbsp", "cup", "oz", "lb", "g", "kg", "ml", "pt", "qt", "ct", "clove", "can", "bottle", "jar", "slice", "pc", "pkg", "bag", "box"];
 
 export default function ManageMeals() {
   const { meals, loading, HOUSEHOLD_ID } = useData();
   const [newMealName, setNewMealName] = useState("");
+  const [newRecipeUrl, setNewRecipeUrl] = useState("");
   const [selectedTags, setSelectedTags] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedMealId, setExpandedMealId] = useState(null);
+  const [editingMealId, setEditingMealId] = useState(null);
+  const [editIngredients, setEditIngredients] = useState([]);
+  const [editRecipeUrl, setEditRecipeUrl] = useState("");
+  const [isSavingIngredients, setIsSavingIngredients] = useState(false);
 
   // Ingredient Builder State
   const [ingredients, setIngredients] = useState([]);
@@ -48,6 +54,7 @@ export default function ManageMeals() {
 
       await addDoc(mealsRef, {
         name: newMealName,
+        recipeUrl: newRecipeUrl.trim(),
         tags: selectedTags,
         ingredients: ingredients, // Injected the ingredients array here
         created_at: serverTimestamp()
@@ -55,6 +62,7 @@ export default function ManageMeals() {
       
       // Reset everything
       setNewMealName('');
+      setNewRecipeUrl('');
       setSelectedTags([]);
       setIngredients([]);
       setCurIngredientName("");
@@ -69,6 +77,56 @@ export default function ManageMeals() {
   const handleDelete = async (id) => {
     if (window.confirm("Remove this meal forever?")) {
       await deleteDoc(doc(db, "households", HOUSEHOLD_ID, "meals", id));
+    }
+  };
+
+  const toggleMealDetails = (meal) => {
+    setExpandedMealId(currentId => currentId === meal.id ? null : meal.id);
+    setEditingMealId(null);
+  };
+
+  const startEditingIngredients = (meal) => {
+    setExpandedMealId(meal.id);
+    setEditingMealId(meal.id);
+    setEditIngredients(meal.ingredients ? meal.ingredients.map(ingredient => ({ ...ingredient })) : []);
+    setEditRecipeUrl(meal.recipeUrl || "");
+  };
+
+  const updateEditIngredient = (index, field, value) => {
+    setEditIngredients(current => current.map((ingredient, ingredientIndex) => (
+      ingredientIndex === index ? { ...ingredient, [field]: value } : ingredient
+    )));
+  };
+
+  const addEditIngredient = () => {
+    setEditIngredients(current => [...current, { amount: '1', unit: 'cup', name: '' }]);
+  };
+
+  const removeEditIngredient = (index) => {
+    setEditIngredients(current => current.filter((_, ingredientIndex) => ingredientIndex !== index));
+  };
+
+  const saveIngredients = async (mealId) => {
+    const validIngredients = editIngredients
+      .filter(ingredient => ingredient.name.trim())
+      .map(ingredient => ({
+        amount: ingredient.amount.trim(),
+        unit: ingredient.unit.trim(),
+        name: ingredient.name.trim()
+      }));
+
+    setIsSavingIngredients(true);
+    try {
+      await updateDoc(doc(db, "households", HOUSEHOLD_ID, "meals", mealId), {
+        ingredients: validIngredients,
+        recipeUrl: editRecipeUrl.trim()
+      });
+      setEditingMealId(null);
+    } catch (error) {
+      console.error("Error updating ingredients:", error);
+      alert("Failed to update ingredients.");
+    } finally {
+      setIsSavingIngredients(false);
     }
   };
 
@@ -90,6 +148,17 @@ export default function ManageMeals() {
               value={newMealName}
               onChange={(e) => setNewMealName(e.target.value)}
               placeholder="e.g. Tacos"
+              className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Recipe URL</label>
+            <input
+              type="url"
+              value={newRecipeUrl}
+              onChange={(e) => setNewRecipeUrl(e.target.value)}
+              placeholder="https://example.com/recipe"
               className="w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
             />
           </div>
@@ -203,25 +272,92 @@ export default function ManageMeals() {
       <div>
         <h2 className="text-lg font-semibold mb-4 text-gray-700">Current Library ({meals.length})</h2>
         <div className="space-y-3">
-          {meals.map(meal => (
-            <div key={meal.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-start">
-              <div>
-                <h3 className="font-bold text-gray-800">{meal.name}</h3>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {meal.ingredients?.slice(0, 3).map((ing, i) => (
-                    <span key={i} className="text-[10px] text-gray-400 italic">
-                      • {ing.name}{i === 2 && meal.ingredients.length > 3 ? '...' : ''}
-                    </span>
-                  ))}
+          {meals.map(meal => {
+            const isExpanded = expandedMealId === meal.id;
+            const isEditing = editingMealId === meal.id;
+            const mealIngredients = meal.ingredients || [];
+
+            return (
+              <div key={meal.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-4 flex justify-between items-start">
+                  <button type="button" onClick={() => toggleMealDetails(meal)} className="flex-1 text-left" aria-expanded={isExpanded}>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-gray-800">{meal.name}</h3>
+                      <span className="text-gray-400 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {mealIngredients.slice(0, 3).map((ing, i) => (
+                        <span key={i} className="text-[10px] text-gray-400 italic">• {ing.name}{i === 2 && mealIngredients.length > 3 ? '...' : ''}</span>
+                      ))}
+                      {mealIngredients.length === 0 && <span className="text-[10px] text-gray-400 italic">No ingredients listed</span>}
+                    </div>
+                  </button>
+                  <button onClick={() => handleDelete(meal.id)} className="text-gray-300 hover:text-red-500 p-2 transition-colors" aria-label={`Delete ${meal.name}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
                 </div>
+
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 p-4">
+                    {!isEditing ? (
+                      <>
+                        {meal.recipeUrl && (
+                          <div className="mb-4">
+                            <p className="text-xs font-bold text-gray-500 uppercase mb-1">Recipe URL</p>
+                            <a
+                              href={meal.recipeUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block text-sm text-orange-700 hover:text-orange-900 hover:underline break-all"
+                            >
+                              {meal.recipeUrl}
+                            </a>
+                          </div>
+                        )}
+                        <div className="space-y-2 mb-4">
+                          {mealIngredients.length > 0 ? mealIngredients.map((ingredient, index) => (
+                            <div key={`${ingredient.name}-${index}`} className="flex justify-between text-sm">
+                              <span className="text-gray-700">{ingredient.name}</span>
+                              <span className="font-medium text-orange-700">{ingredient.amount} {ingredient.unit}</span>
+                            </div>
+                          )) : <p className="text-sm text-gray-400 italic">No ingredients listed.</p>}
+                        </div>
+                        <button type="button" onClick={() => startEditingIngredients(meal)} className="w-full py-2 bg-orange-600 text-white rounded-lg text-sm font-bold hover:bg-orange-700 transition-colors">Edit Ingredients</button>
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Recipe URL</label>
+                          <input
+                            type="url"
+                            value={editRecipeUrl}
+                            onChange={event => setEditRecipeUrl(event.target.value)}
+                            placeholder="https://example.com/recipe"
+                            className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                          />
+                        </div>
+                        {editIngredients.map((ingredient, index) => (
+                          <div key={index} className="flex gap-2 items-center">
+                            <input value={ingredient.amount} onChange={event => updateEditIngredient(index, 'amount', event.target.value)} className="w-16 p-2 border border-gray-200 rounded-lg text-sm" aria-label="Ingredient amount" />
+                            <input value={ingredient.unit} onChange={event => updateEditIngredient(index, 'unit', event.target.value)} className="w-20 p-2 border border-gray-200 rounded-lg text-sm" aria-label="Ingredient unit" />
+                            <input value={ingredient.name} onChange={event => updateEditIngredient(index, 'name', event.target.value)} className="flex-1 min-w-0 p-2 border border-gray-200 rounded-lg text-sm" placeholder="Ingredient" aria-label="Ingredient name" />
+                            <button type="button" onClick={() => removeEditIngredient(index)} className="text-gray-400 hover:text-red-500 font-bold px-1" aria-label="Remove ingredient">×</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={addEditIngredient} className="w-full py-2 border border-dashed border-orange-300 text-orange-700 rounded-lg text-sm font-bold hover:bg-orange-50">+ Add Ingredient</button>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setEditingMealId(null)} className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold">Cancel</button>
+                          <button type="button" onClick={() => saveIngredients(meal.id)} disabled={isSavingIngredients} className="flex-1 py-2 bg-orange-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">{isSavingIngredients ? 'Saving...' : 'Save Ingredients'}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <button onClick={() => handleDelete(meal.id)} className="text-gray-300 hover:text-red-500 p-2 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                </svg>
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
