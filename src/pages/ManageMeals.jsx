@@ -169,58 +169,53 @@ export default function ManageMeals() {
               Ingredient Builder
             </label>
 
-            <div className="flex items-start gap-2 h-32 mb-4">
-              
-              {/* NEW GROUP FOR THE WHEELS ONLY - THIS IS WHERE THE HIGHLIGHT LIVES */}
-              <div className="flex-1 h-full flex relative rounded-xl border border-gray-100 bg-white shadow-inner overflow-hidden">
-                
-                {/* 1. VISUAL CENTER HIGHLIGHT OVERLAY (Fixed positioning relative to this parent) */}
+            <div className="flex flex-col gap-2 mb-3">
+              <div className="h-28 relative rounded-xl border border-gray-100 bg-white shadow-inner overflow-hidden">
                 <div className="absolute inset-x-0 h-10 border-y border-orange-200 bg-orange-50/40 pointer-events-none top-1/2 -translate-y-1/2 rounded-md z-10" />
 
-                {/* 2. Amount Wheel */}
-                <div className="flex-1 h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar text-center py-12 scroll-smooth"
-                    onScroll={(e) => {
-                      const idx = Math.round(e.target.scrollTop / 40);
-                      if (AMOUNTS[idx] && AMOUNTS[idx] !== curAmount) setCurAmount(AMOUNTS[idx]);
-                    }}>
-                  {AMOUNTS.map((a) => (
-                    <div key={a} className={`h-10 flex items-center justify-center snap-center text-sm font-medium transition-colors ${a === curAmount ? 'text-orange-700' : 'text-gray-400'}`}>
-                      {a}
-                    </div>
-                  ))}
-                </div>
+                <div className="h-full flex">
+                  <div className="flex-1 h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar text-center py-9 scroll-smooth"
+                      onScroll={(e) => {
+                        const idx = Math.round(e.target.scrollTop / 40);
+                        if (AMOUNTS[idx] && AMOUNTS[idx] !== curAmount) setCurAmount(AMOUNTS[idx]);
+                      }}>
+                    {AMOUNTS.map((a) => (
+                      <div key={a} className={`h-10 flex items-center justify-center snap-center text-xs font-medium transition-colors ${a === curAmount ? 'text-orange-700' : 'text-gray-400'}`}>
+                        {a}
+                      </div>
+                    ))}
+                  </div>
 
-                {/* 3. Unit Wheel */}
-                <div className="flex-1 h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar text-center py-12 scroll-smooth"
-                    onScroll={(e) => {
-                      const idx = Math.round(e.target.scrollTop / 40);
-                      if (UNITS[idx] && UNITS[idx] !== curUnit) setCurUnit(UNITS[idx]);
-                    }}>
-                  {UNITS.map((u) => (
-                    <div key={u} className={`h-10 flex items-center justify-center snap-center text-sm font-medium transition-colors ${u === curUnit ? 'text-orange-700' : 'text-gray-400'}`}>
-                      {u}
-                    </div>
-                  ))}
+                  <div className="flex-1 h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar text-center py-9 scroll-smooth"
+                      onScroll={(e) => {
+                        const idx = Math.round(e.target.scrollTop / 40);
+                        if (UNITS[idx] && UNITS[idx] !== curUnit) setCurUnit(UNITS[idx]);
+                      }}>
+                    {UNITS.map((u) => (
+                      <div key={u} className={`h-10 flex items-center justify-center snap-center text-xs font-medium transition-colors ${u === curUnit ? 'text-orange-700' : 'text-gray-400'}`}>
+                        {u}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* 4. Name Input & Add Button (Now naturally aligned on the right) */}
-              <div className="flex-[1.2] flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
                 <input 
                   type="text"
                   placeholder="Item name..."
                   value={curIngredientName}
                   onChange={(e) => setCurIngredientName(e.target.value)}
-                  className="p-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-orange-500 shadow-sm transition-all"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500 shadow-sm transition-all"
                 />
                 <button 
                   type="button"
                   onClick={addIngredientToList}
-                  className="bg-orange-600 text-white py-3 rounded-xl font-bold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                  className="w-full bg-orange-600 text-white py-2.5 rounded-xl font-bold text-xs active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
                   disabled={!curIngredientName.trim()}
                 >
                   <span>Add Item</span>
-                  <span className="text-xl leading-none">+</span>
+                  <span className="text-base leading-none">+</span>
                 </button>
               </div>
             </div>
