@@ -17,7 +17,8 @@ function App() {
           {/* 2. Manage Page: Add/Edit recipes */}
           <Route path="/manage" element={<ManageMeals />} />
           
-          {/* 3. Pantry Page: Grocery list */}
+          {/* 3. Store Page: Grocery list */}
+          <Route path="/store" element={<Pantry />} />
           <Route path="/pantry" element={<Pantry />} />
         </Routes>
       </Layout>

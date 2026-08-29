@@ -14,6 +14,7 @@ export function DataProvider({ children }) {
   const [weekPlan, setWeekPlan] = useState({});
   const [lockedDays, setLockedDays] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDays, setSelectedDays] = useState([]);
 
   const HOUSEHOLD_ID = "demo_household";
 
@@ -48,6 +49,7 @@ const unsubHousehold = onSnapshot(householdRef, async (docSnap) => {
     setWeekPlan(data.week_plan || {});
     setLockedDays(data.locked_days || []);
     setLoading(false);
+    setSelectedDays(data.selected_days || []);
   } else {
     // If we reach here, the document is officially GONE.
     console.log("No household found. Seeding initial data...");
@@ -57,7 +59,8 @@ const unsubHousehold = onSnapshot(householdRef, async (docSnap) => {
       await setDoc(householdRef, {
         pantry: [],
         week_plan: {},
-        locked_days: []
+        locked_days: [],
+        selected_days: []
       });
 
       // 2. Seed the meals sub-collection
@@ -93,6 +96,7 @@ const unsubHousehold = onSnapshot(householdRef, async (docSnap) => {
     pantry,
     weekPlan,
     lockedDays,
+    selectedDays,
     loading,
     HOUSEHOLD_ID
   };
