@@ -11,8 +11,8 @@ export default function Layout({ children }) {
         
         {/* Mobile Top Header (Now visible everywhere) */}
         <div className="bg-white p-4 flex justify-center items-center sticky top-0 z-10 border-b border-gray-100">
-          <img src={logo} alt="Dinnr" className="h-8 w-auto mr-2" />
-          <span className="text-lg font-bold text-orange-600">Dinnr</span>
+          <img src={logo} alt="Meal Mix" className="h-8 w-auto mr-2" />
+          <span className="text-lg font-bold text-orange-600">Meal Mix</span>
         </div>
 
         {/* Main Content Area */}

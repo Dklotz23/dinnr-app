@@ -83,13 +83,35 @@ export default function Generator() {
     }
   };
 
+  const clearAllMealsFromPlan = async () => {
+    const hasMeals = DAYS.some(day => !!weekPlan[day]);
+    if (!hasMeals) return;
+
+    if (!window.confirm("Clear all meals from this week's plan?")) return;
+
+    try {
+      const householdRef = doc(db, "households", HOUSEHOLD_ID);
+      const updates = {
+        selected_days: [],
+        locked_days: []
+      };
+
+      DAYS.forEach(day => {
+        updates[`week_plan.${day}`] = null;
+      });
+
+      await updateDoc(householdRef, updates);
+    } catch (error) {
+      console.error("Error clearing all plan meals:", error);
+    }
+  };
+
   const moveLockedMealsToPantry = async () => {
-    const lockedMealNames = DAYS
-      .filter(day => lockedDays.includes(day))
+    const plannedMealNames = DAYS
       .map(day => weekPlan[day])
       .filter(Boolean);
 
-    if (lockedMealNames.length === 0) {
+    if (plannedMealNames.length === 0) {
       navigate('/store');
       return;
     }
@@ -99,14 +121,14 @@ export default function Generator() {
       const ingredientTotals = new Map();
       const mealsWithoutIngredients = new Set();
 
-      lockedMealNames.forEach(mealName => {
+      plannedMealNames.forEach(mealName => {
         const meal = meals.find(item => item.name === mealName);
         if (!meal?.ingredients?.length) {
           mealsWithoutIngredients.add(mealName);
           return;
         }
 
-        meal?.ingredients?.forEach(ingredient => {
+        meal.ingredients.forEach(ingredient => {
           const name = ingredient.name.trim();
           const unit = ingredient.unit.trim();
           const key = `${name.toLowerCase()}|${unit.toLowerCase()}`;
@@ -135,20 +157,13 @@ export default function Generator() {
           checked: false
         }))
       );
-      const updates = {
-        pantry: newPantryItems,
-        locked_days: [],
-        selected_days: selectedDays.filter(day => !lockedDays.includes(day))
-      };
 
-      lockedDays.forEach(day => {
-        if (weekPlan[day]) updates[`week_plan.${day}`] = null;
+      await updateDoc(householdRef, {
+        pantry: newPantryItems
       });
-
-      await updateDoc(householdRef, updates);
       navigate('/store');
     } catch (error) {
-      console.error("Error moving locked meals to pantry:", error);
+      console.error("Error refreshing pantry from plan:", error);
     }
   };
 
@@ -291,8 +306,17 @@ const toggleLock = async (e, day) => {
   return (
     <div className="pb-24 max-w-md mx-auto p-4">
       <div className="mb-8">
-        <div className="relative flex justify-center items-center mb-6 min-h-[40px]">
-          <h3 className="absolute left-0 text-lg font-bold text-gray-700">This Week's Plan</h3>
+        <div className="flex items-center justify-between gap-3 mb-6 min-h-[40px]">
+          <h3 className="text-lg font-bold text-gray-700">This Week's Plan</h3>
+          {DAYS.some(day => !!weekPlan[day]) && (
+            <button
+              type="button"
+              onClick={clearAllMealsFromPlan}
+              className="text-[11px] font-bold text-red-500 hover:text-red-700 transition-colors"
+            >
+              Clear All
+            </button>
+          )}
         </div>
 
         <div className="space-y-3">
